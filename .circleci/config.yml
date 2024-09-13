@@ -1,0 +1,61 @@
+version: 2.1
+
+# setup a build environment that has the following dependencies
+# Git 2.2.1 or later
+# Docker Engine or Docker Desktop 1.9 or later
+# Maven 3.8.5 or later
+# Java 17 or later
+orbs:
+  aws-cli: circleci/aws-cli@3.1.1
+  aws-code-deploy: circleci/aws-code-deploy@0.0.9
+  aws-ecr: circleci/aws-ecr@6.9.0
+  browser-tools: circleci/browser-tools@1.4.8
+
+jobs:
+  build-provider:
+    docker:
+      - image: cimg/openjdk:17.0
+    steps:
+      - checkout
+      - run:
+          name: Build pg-provider
+          command: mvn -T 8C clean install -DskipTests=true
+      - persist_to_workspace:
+          root: .
+          paths:
+            - target
+            - src
+            - pom.xml
+  build-docker:
+    docker:
+      - image: cimg/base:2024.09
+    steps:
+      - checkout
+      - setup_remote_docker
+      - aws-cli/install
+      - aws-cli/setup
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: copy from /tmp/workspace
+          command: |
+            cp -r /tmp/workspace/target .
+            cp -r /tmp/workspace/src .
+            cp -r /tmp/workspace/pom.xml .
+      - run:
+          name: Build Docker Image
+          command: docker build -f docker/Dockerfile -t 577326318091.dkr.ecr.us-east-1.amazonaws.com/polarity-keycloak/keycloak-pg-provider:latest .
+      - run:
+          name: Push Docker Image
+          command: |
+            docker login -u AWS -p $(aws ecr get-login-password 2>&1) https://577326318091.dkr.ecr.us-east-1.amazonaws.com
+            docker push 577326318091.dkr.ecr.us-east-1.amazonaws.com/polarity-keycloak/keycloak-pg-provider:latest
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build-provider
+      - build-docker:
+          requires:
+            - build-provider

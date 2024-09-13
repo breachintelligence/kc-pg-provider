@@ -99,6 +99,7 @@
                 <includes>
                   <include>com.maxmind.db:*</include>
                   <include>com.maxmind.geoip2:*</include>
+                  <include>org.postgresql*</include>
                   <!--                  <include>software.amazon.awssdk:*</include>-->
                   <!--                  <include>org.reactivestreams:reactive-streams</include>-->
                 </includes>
