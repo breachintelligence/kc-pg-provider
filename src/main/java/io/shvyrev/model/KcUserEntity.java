@@ -1,28 +1,22 @@
 package io.shvyrev.model;
 
-import javax.persistence.*;
 import java.util.UUID;
 
-@NamedQueries({
-        @NamedQuery(name="getUserByUsername", query="select u from KcUserEntity u where u.username=:username"),
-        @NamedQuery(name="getUserCount", query="select count(u) from KcUserEntity u"),
-        @NamedQuery(name="getAllUsers", query="select u from KcUserEntity u"),
-        @NamedQuery(name="searchForUser", query="select u from KcUserEntity u where " + "( u.username like :search )")
-})
-@Entity
-@Table(name = "users")
 public class KcUserEntity {
 
-    @Id
-    private UUID id;
+    private String id;
     private String username;
     private String password;
+    private String email;
+    private String firstName;
+    private String lastName;
+    private boolean enabled;
 
-    public UUID getId() {
+    public String getId() {
         return id;
     }
 
-    public void setId(UUID id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -42,12 +36,51 @@ public class KcUserEntity {
         this.password = password;
     }
 
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public String getFullName() {
+        return firstName + " " + lastName;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     @Override
     public String toString() {
         return "UserEntity{" +
                 "id=" + id +
                 ", username='" + username + '\'' +
                 ", password='" + password + '\'' +
+                ", email='" + email + '\'' +
+                ", firstName='" + firstName + '\'' +
+                ", lastName='" + lastName + '\'' +
                 '}';
     }
 }

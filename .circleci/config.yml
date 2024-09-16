@@ -20,12 +20,19 @@ jobs:
       - run:
           name: Build pg-provider
           command: mvn -T 8C clean install -DskipTests=true
+      - run:
+          name: copy bcrypt jar
+          command: |
+            mkdir -p deps
+            find ~/.m2/repository -name 'bcrypt-*.jar' -exec cp {} deps \;           
+            find ~/.m2/repository -name 'bytes-*.jar' -exec cp {} deps \;
       - persist_to_workspace:
           root: .
           paths:
             - target
             - src
             - pom.xml
+            - deps
   build-docker:
     docker:
       - image: cimg/base:2024.09
@@ -42,6 +49,7 @@ jobs:
             cp -r /tmp/workspace/target .
             cp -r /tmp/workspace/src .
             cp -r /tmp/workspace/pom.xml .
+            cp -r /tmp/workspace/deps .
       - run:
           name: Build Docker Image
           command: docker build -f docker/Dockerfile -t 577326318091.dkr.ecr.us-east-1.amazonaws.com/polarity-keycloak/keycloak-pg-provider:latest .

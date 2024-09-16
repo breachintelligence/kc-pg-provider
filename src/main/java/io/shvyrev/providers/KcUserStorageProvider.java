@@ -4,7 +4,6 @@ import io.shvyrev.model.UserAdapter;
 import io.shvyrev.model.KcUserEntity;
 import org.jboss.logging.Logger;
 import org.keycloak.component.ComponentModel;
-import org.keycloak.connections.jpa.JpaConnectionProvider;
 import org.keycloak.credential.CredentialInput;
 import org.keycloak.credential.CredentialInputUpdater;
 import org.keycloak.credential.CredentialInputValidator;
@@ -17,11 +16,16 @@ import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.user.UserLookupProvider;
 import org.keycloak.storage.user.UserQueryProvider;
 import org.keycloak.storage.user.UserRegistrationProvider;
+import org.apache.commons.codec.digest.DigestUtils;
 
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
 import java.util.*;
 import java.util.stream.Stream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+import at.favre.lib.crypto.bcrypt.BCrypt;
 
 public class KcUserStorageProvider implements UserStorageProvider,
         UserLookupProvider,
@@ -33,14 +37,14 @@ public class KcUserStorageProvider implements UserStorageProvider,
     public static final String PASSWORD_CACHE_KEY = UserAdapter.class.getName() + ".password";
     private final KeycloakSession session;
     private final ComponentModel model;
-    private final EntityManager em;
+    private final Connection conn;
 
     private static final Logger log = Logger.getLogger( KcUserStorageProvider.class );
 
-    public KcUserStorageProvider(KeycloakSession session, ComponentModel model) {
+    public KcUserStorageProvider(KeycloakSession session, ComponentModel model, Connection conn) {
         this.session = session;
         this.model = model;
-        em = session.getProvider(JpaConnectionProvider.class, "user-store").getEntityManager();
+        this.conn = conn;
     }
 
     @Override
@@ -64,38 +68,80 @@ public class KcUserStorageProvider implements UserStorageProvider,
     @Override
     public void close() {
         log.info("$ "+ "close() called");
-//        INFO still not implemented
+
+        try {
+            this.conn.close();
+        } catch (SQLException e) {
+            log.error("$ "+ "close() called");
+        }
     }
 
     @Override
     public UserModel getUserById(RealmModel realm, String id) {
         log.info("$ "+ "getUserById() called with: realm = [" + realm + "], id = [" + id + "]");
 
-        String persistenceId = StorageId.externalId(id);
-        KcUserEntity entity = em.find(KcUserEntity.class, UUID.fromString(persistenceId));
-        if (entity == null) {
-            log.info("could not find user by id: " + id);
-            return null;
-        }
-        return new UserAdapter(session, realm, model, entity);
+        StorageId storageId = new StorageId(id);
+        String username = storageId.getExternalId();
+
+        return getUserByUsername(realm, username);
     }
 
     @Override
     public UserModel getUserByUsername(RealmModel realm, String username) {
         log.info("$ "+ "getUserByUsername() called with: realm = [" + realm + "], username = [" + username + "]");
 
-        TypedQuery<KcUserEntity> query = em.createNamedQuery("getUserByUsername", KcUserEntity.class);
-        query.setParameter("username", username);
+        String table = this.model.getConfig().getFirst("table");
+        String query = "SELECT * FROM " + table + " WHERE username = ?";
 
-        List<KcUserEntity> result = query.getResultList();
+        try {
+            PreparedStatement stmt = this.conn.prepareStatement(query);
+            stmt.setString(1, username);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                KcUserEntity entity = new KcUserEntity();
+                entity.setId(rs.getString("id"));
+                entity.setUsername(rs.getString("username"));
+                entity.setPassword(rs.getString("password_hash"));
+                entity.setEmail(rs.getString("email"));
+                entity.setFirstName(rs.getString("full_name"));
+                entity.setEnabled(rs.getBoolean("enabled"));
 
-        return result.isEmpty() ? null : new UserAdapter(session, realm, model, result.get(0));
+                log.info("$ "+ "getUserByUsername() called with: realm = [" + realm + "], username = [" + username + "], entity = [" + entity + "]");
+                return new UserAdapter(this.session, realm, this.model, entity);
+            }
+        } catch (SQLException e) {
+            log.error("$ "+ "getUserByUsername() called with: realm = [" + realm + "], username = [" + username + "]");
+            log.error("SqlException: " + e.getMessage());
+        }
+
+        return null;
     }
 
     @Override
     public UserModel getUserByEmail(RealmModel realm, String email) {
         log.info("$ "+ "getUserByEmail() called with: realm = [" + realm + "], email = [" + email + "]");
-//        INFO still not implemented
+        
+        String table = this.model.getConfig().getFirst("table");
+        String query = "SELECT * FROM " + table + " WHERE email = ?";
+
+        try {
+            PreparedStatement stmt = this.conn.prepareStatement(query);
+            stmt.setString(1, email);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                KcUserEntity entity = new KcUserEntity();
+                entity.setId(rs.getString("id"));
+                entity.setUsername(rs.getString("username"));
+                entity.setPassword(rs.getString("password_hash"));
+                entity.setEmail(rs.getString("email"));
+                entity.setFirstName(rs.getString("full_name"));
+                entity.setEnabled(rs.getBoolean("enabled"));
+                return new UserAdapter(this.session, realm, this.model, entity);
+            }
+        } catch (SQLException e) {
+            log.error("$ "+ "getUserByEmail() called with: realm = [" + realm + "], email = [" + email + "]");
+            log.error("SqlException: " + e.getMessage());
+        }
 
         return null;
     }
@@ -103,22 +149,12 @@ public class KcUserStorageProvider implements UserStorageProvider,
     @Override
     public UserModel addUser(RealmModel realm, String username) {
         log.info("$ "+ "addUser() called with: realm = [" + realm + "], username = [" + username + "]");
-
-        KcUserEntity entity = new KcUserEntity();
-        entity.setId(UUID.randomUUID());
-        entity.setUsername(username);
-        em.persist(entity);
-        return new UserAdapter(session, realm, model, entity);
+        return null;
     }
 
     @Override
     public boolean removeUser(RealmModel realm, UserModel user) {
         log.info("$ "+ "removeUser() called with: realm = [" + realm + "], user = [" + user + "]");
-
-        String persistenceId = StorageId.externalId(user.getId());
-        KcUserEntity entity = em.find(KcUserEntity.class, persistenceId);
-        if (entity == null) return false;
-        em.remove(entity);
         return true;
     }
 
@@ -197,7 +233,24 @@ public class KcUserStorageProvider implements UserStorageProvider,
         if (!supportsCredentialType(input.getType()) || !(input instanceof UserCredentialModel)) return false;
         UserCredentialModel cred = (UserCredentialModel)input;
         String password = getPassword(user);
-        return password != null && password.equals(cred.getValue());
+
+        if (password == null)
+          return false;
+
+        String hex = null;
+        switch (this.model.getConfig().getFirst("hashAlgorithm").toLowerCase()) {
+          case "sha1":
+              hex = DigestUtils.sha1Hex(input.getChallengeResponse());
+              break;
+          case "md5":
+              hex = DigestUtils.md5Hex(input.getChallengeResponse());
+              break;
+          case "bcrypt":
+              char[] incomingPassword = input.getChallengeResponse().toCharArray();
+              return BCrypt.verifyer(BCrypt.Version.VERSION_2B).verify(incomingPassword, password.toCharArray()).verified;
+        }
+
+        return password.equalsIgnoreCase(hex);
     }
 
     public String getPassword(UserModel user) {
@@ -216,54 +269,106 @@ public class KcUserStorageProvider implements UserStorageProvider,
     public int getUsersCount(RealmModel realm) {
         log.info("$ "+ "getUsersCount() called with: realm = [" + realm + "]");
 
-        Object count = em.createNamedQuery("getUserCount")
-                .getSingleResult();
-        return ((Number)count).intValue();
+        int count = 0;
+        String table = this.model.getConfig().getFirst("table");
+        String query = "SELECT COUNT(*) FROM " + table;
+
+        try {
+            PreparedStatement stmt = this.conn.prepareStatement(query);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                count = rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            log.error("$ "+ "getUsersCount() called with: realm = [" + realm + "]");
+            log.error("SqlException: " + e.getMessage());
+        }
+
+        return count;
     }
 
-
-    @Override
     public Stream<UserModel> getUsersStream(RealmModel realm, Integer firstResult, Integer maxResults) {
         log.info("$ "+ "getUsersStream() called with: realm = [" + realm + "], firstResult = [" + firstResult + "], maxResults = [" + maxResults + "]");
 
-//        FIXME не знаю почему так сделали. Отдеприкейтили метод, а новый метод - `searchForUserStream` с уровнем доступа `pakage-private`. Может баг, но через ревлекшены не буду его доставать - не в иделогии Quarkus.
+        String table = this.model.getConfig().getFirst("table");
+        String query = "SELECT * FROM " + table + " LIMIT " + maxResults + " OFFSET " + firstResult;
 
-        TypedQuery<KcUserEntity> query = em.createNamedQuery("getAllUsers", KcUserEntity.class);
-        if (firstResult == 1) {
-            query.setFirstResult(firstResult);
+        try {
+            PreparedStatement stmt = this.conn.prepareStatement(query);
+            ResultSet rs = stmt.executeQuery();
+            List<UserModel> users = new ArrayList<>();
+            while (rs.next()) {
+                KcUserEntity entity = new KcUserEntity();
+                entity.setId(rs.getString("id"));
+                entity.setUsername(rs.getString("username"));
+                entity.setPassword(rs.getString("password_hash"));
+                entity.setEmail(rs.getString("email"));
+                entity.setFirstName(rs.getString("full_name"));
+                entity.setEnabled(rs.getBoolean("enabled"));
+
+                log.info("entity: " + entity);
+
+                users.add(new UserAdapter(this.session, realm, this.model, entity));
+            }
+            return users.stream();
+        } catch (SQLException e) {
+            log.error("$ "+ "getUsersStream() called with: realm = [" + realm + "], firstResult = [" + firstResult + "], maxResults = [" + maxResults + "]");
+            log.error("SqlException: " + e.getMessage());
+            return Stream.empty();
         }
-        if (maxResults != -1) {
-            query.setMaxResults(maxResults);
-        }
-        List<KcUserEntity> results = query.getResultList();
-        List<UserModel> users = new LinkedList<>();
-        for (KcUserEntity entity : results) users.add(new UserAdapter(session, realm, model, entity));
-        return users.stream();
     }
 
     @Override
     public Stream<UserModel> searchForUserStream(RealmModel realm, String search, Integer firstResult, Integer maxResults) {
         log.info("$ "+ "searchForUserStream() called with: realm = [" + realm + "], search = [" + search + "], firstResult = [" + firstResult + "], maxResults = [" + maxResults + "]");
 
-        TypedQuery<KcUserEntity> query = em.createNamedQuery("searchForUser", KcUserEntity.class);
-        query.setParameter("search", "%" + search.toLowerCase() + "%");
-        if (firstResult == -1) {
-            query.setFirstResult(firstResult);
+        log.info(search);
+        if (search == null || search.isEmpty()) {
+            log.info(" search was empty ");
+            return getUsersStream(realm, firstResult, maxResults);
         }
-        if (maxResults != -1) {
-            query.setMaxResults(maxResults);
+
+        if (search == "*") {
+            log.info(" search was wild card ");
+            return getUsersStream(realm, firstResult, maxResults);
         }
-        List<KcUserEntity> results = query.getResultList();
-        List<UserModel> users = new LinkedList<>();
-        for (KcUserEntity entity : results) users.add(new UserAdapter(session, realm, model, entity));
-        return users.stream();
+
+        String table = this.model.getConfig().getFirst("table");
+        String searchPattern = "%" + search + "%";
+        String query = "SELECT * FROM " + table + " WHERE username LIKE ? LIMIT " + maxResults + " OFFSET " + firstResult;
+
+        try {
+            PreparedStatement stmt = this.conn.prepareStatement(query);
+            stmt.setString(1, searchPattern);
+            ResultSet rs = stmt.executeQuery();
+            List<UserModel> users = new ArrayList<>();
+            while (rs.next()) {
+                KcUserEntity entity = new KcUserEntity();
+                entity.setId(rs.getString("id"));
+                entity.setUsername(rs.getString("username"));
+                entity.setPassword(rs.getString("password_hash"));
+                entity.setEmail(rs.getString("email"));
+                entity.setFirstName(rs.getString("full_name"));
+                entity.setEnabled(rs.getBoolean("enabled"));
+
+                log.info("entity: " + entity);
+
+                users.add(new UserAdapter(this.session, realm, this.model, entity));
+            }
+            return users.stream();
+        } catch (SQLException e) {
+            log.error("$ "+ "searchForUserStream() called with: realm = [" + realm + "], search = [" + search + "], firstResult = [" + firstResult + "], maxResults = [" + maxResults + "]");
+            log.error("SqlException: " + e.getMessage());
+            return Stream.empty();
+        }
     }
 
     @Override
     public Stream<UserModel> searchForUserStream(RealmModel realm, Map<String, String> params, Integer firstResult, Integer maxResults) {
         log.info("$ "+ "searchForUserStream() called with: realm = [" + realm + "], params = [" + params + "], firstResult = [" + firstResult + "], maxResults = [" + maxResults + "]");
-//        INFO still not implemented
-        return Stream.empty();
+        
+        String search = params.get("keycloak.session.realm.users.query.search");
+        return searchForUserStream(realm, search, firstResult, maxResults);
     }
 
     @Override

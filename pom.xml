@@ -18,7 +18,6 @@
     <maven.compiler.target>17</maven.compiler.target>
     <version.keycloak>21.1.1</version.keycloak>
     <version.compiler.maven.plugin>3.5.1</version.compiler.maven.plugin>
-    <version.hibernate.javax.persistence>1.0.2.Final</version.hibernate.javax.persistence>
     <arquillian-graphene.version>2.5.4</arquillian-graphene.version>
     <version.surefire.plugin>3.0.0</version.surefire.plugin>
     <maven.compiler.plugin>3.10.1</maven.compiler.plugin>
@@ -30,6 +29,11 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>42.6.0</version>
+    </dependency>
+    <dependency>
+      <groupId>at.favre.lib</groupId>
+      <artifactId>bcrypt</artifactId>
+      <version>0.10.2</version>
     </dependency>
     <dependency>
       <groupId>org.keycloak</groupId>
@@ -67,12 +71,6 @@
       <version>3.5.0.Final</version>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>org.hibernate.javax.persistence</groupId>
-      <artifactId>hibernate-jpa-2.1-api</artifactId>
-      <version>${version.hibernate.javax.persistence}</version>
-      <scope>provided</scope>
-    </dependency>
   </dependencies>
 
   <build>
@@ -100,8 +98,6 @@
                   <include>com.maxmind.db:*</include>
                   <include>com.maxmind.geoip2:*</include>
                   <include>org.postgresql*</include>
-                  <!--                  <include>software.amazon.awssdk:*</include>-->
-                  <!--                  <include>org.reactivestreams:reactive-streams</include>-->
                 </includes>
               </artifactSet>
             </configuration>
