@@ -10,7 +10,7 @@ WORKDIR /opt/keycloak
 RUN keytool -genkeypair -storepass password -storetype PKCS12 -keyalg RSA -keysize 2048 -dname "CN=server" -alias server -ext "SAN:c=DNS:localhost,IP:127.0.0.1" -keystore conf/server.keystore
 
 # find and copy bcrypt-0.10.2.jar to /opt/keycloak
-ADD --chown=keycloak:keycloak deps/*.jar /opt/keycloak/providers
+# ADD --chown=keycloak:keycloak deps/*.jar /opt/keycloak/providers
 
 RUN /opt/keycloak/bin/kc.sh build
 

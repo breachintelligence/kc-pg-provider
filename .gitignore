@@ -59,3 +59,12 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+target/classes/META-INF/beans.xml
+target/classes/META-INF/services/org.keycloak.authentication.AuthenticatorFactory
+target/maven-archiver/pom.properties
+target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst
+target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst
+target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst
+target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst
+dependency-reduced-pom.xml
+.vscode/settings.json
